@@ -208,18 +208,6 @@ Published results use different splits and metric implementations, so only F1 is
 
 ---
 
-## Citation
-
-A citation entry will be added when the accompanying manuscript is available. Until then, please reference this repository:
-
-~~~
-Wong Jing Tao Joanne. HybridFusionNet: Multimodal Wildfire Segmentation using YOLOv12 and EfficientNet.
-GitHub repository, https://github.com/wongjoan/HybridFusion, 2026.
-~~~
-
-Dataset citations: Toulouse et al. (2017) for CFDB; Rui et al. (2023) for the RGB-T Wildfire Dataset.
-
----
 
 ## License
 
