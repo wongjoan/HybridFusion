@@ -1,240 +1,230 @@
 # HybridFusionNet: Multimodal Wildfire Segmentation using YOLOv12 and EfficientNet
 
-[![PyTorch](https://img.shields.io/badge/PyTorch-v2.0+-EE4C2C.svg?style=for-the-badge&logo=PyTorch&logoColor=white)](https://pytorch.org/)
+[![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-EE4C2C.svg?style=for-the-badge&logo=PyTorch&logoColor=white)](https://pytorch.org/)
 [![Python](https://img.shields.io/badge/Python-3.8+-3776AB.svg?style=for-the-badge&logo=Python&logoColor=white)](https://www.python.org/)
 [![Ultralytics](https://img.shields.io/badge/Ultralytics-YOLOv12-blue?style=for-the-badge)](https://github.com/ultralytics/ultralytics)
 
-Official PyTorch implementation of the paper **"Multimodal Wildfire Segmentation using YOLOv12 and EfficientNet"**. 
+PyTorch code for RGB-infrared (RGB-IR) wildfire segmentation. The project was developed during a research internship at Deakin University's Institute for Intelligent Systems Research and Innovation (IISRI). 
 
-This repository contains the code for a highly robust, ensemble-based multimodal semantic segmentation framework designed for pixel-level wildfire mapping. By leveraging both Red-Green-Blue (RGB) and Infrared (IR) thermal imagery, the system mitigates common environmental challenges such as dense smoke occlusion, nighttime darkness, and complex background clutter.
-
----
-
-## 🧠 Architecture Overview
-
-HybridFusionNet does not rely on a single model. Instead, it aggregates predictions from three architecturally distinct dual-stream networks to minimize individual architectural biases:
-
-* **`DualModalYOLO`**: Utilizes parallel YOLOv12m backbones. It fuses modalities via element-wise addition at the feature pyramid (FPN) level. It excels at capturing high-frequency spatial structures using `C3k2` and `A2C2f` attention blocks.
-* **`EfficientNetFire`**: Employs dual EfficientNet-B2 backbones. Fusion is handled via **Cross-Modal Attention**, where RGB queries interact with IR key/value pairs, followed by CBAM spatial and channel recalibration.
-* **`HybridModel` (Best Single Model)**: An asymmetric architecture pairing a YOLOv12n backbone (for RGB) with an EfficientNet-B2 backbone (for IR). It uses a novel **SpatialGateFusion** module to dynamically learn per-pixel, per-channel mixing weights, allowing the model to adaptively "trust" the IR stream when smoke occludes the RGB view.
+The framework segments active fire pixels from aligned RGB and IR image pairs. Fusing the two modalities targets common failure cases for RGB-only models: smoke occlusion, low light and cluttered backgrounds.
 
 ---
 
-## ✨ Key Innovations
+## Architecture Overview
 
-1. **Spatial Gate Fusion**: Unlike scalar fusion weights, this module generates a `[B, C, H, W]` gate map. Every pixel and channel independently determines its optimal RGB-IR mixing ratio.
-2. **Edge-Aware Encoders**: Dedicated lightweight convolutional branches extract high-frequency boundaries directly from raw RGB and IR inputs, explicitly supervising the fire perimeter to prevent boundary degradation in deep layers.
-3. **Logit-Space Ensemble**: The ensemble aggregates raw logits (confidence scores) from the three models before applying a single sigmoid activation and threshold. This preserves the "strength" of model convictions better than probability-space averaging.
-4. **Hybrid Loss Function**: Combines **Focal Loss** (with online hard example mining on the top 70% hardest pixels), **Dice Loss**, and **Tversky Loss** (heavily penalizing false negatives) to conquer extreme foreground-background class imbalance.
+Three dual-stream networks are trained separately, then optionally combined by a logit-space ensemble:
+
+- **`DualModalYOLO`**: Parallel YOLOv12m backbones. Modalities are fused by element-wise addition at the feature pyramid (FPN) level, using `C3k2` and `A2C2f` attention blocks.
+- **`EfficientNetFire`**: Dual EfficientNet-B2 backbones. Fusion uses cross-modal attention (RGB queries, IR keys/values), followed by CBAM spatial and channel recalibration.
+- **`HybridModel`**: An asymmetric design pairing a YOLOv12n backbone (RGB) with an EfficientNet-B2 backbone (IR). A **SpatialGateFusion** module learns per-pixel, per-channel mixing weights, so the network can weight the IR stream more where smoke obscures the RGB view.
 
 ---
 
-## 📁 Repository Structure
+## Key Components
 
-```text
+1. **Spatial Gate Fusion**: Produces a `[B, C, H, W]` gate map, so every pixel and channel learns its own RGB/IR mixing ratio instead of using one scalar weight.
+2. **Edge-Aware Encoders**: Lightweight convolutional branches extract high-frequency boundaries from the raw RGB and IR inputs and supervise the fire perimeter.
+3. **Logit-Space Ensemble**: Raw logits from the three models are combined as a weighted sum before a single sigmoid and threshold.
+4. **Hybrid Loss**: Focal loss (hard-pixel mining on the top 70% highest-loss pixels), Dice loss and Tversky loss (penalizing false negatives) for strong foreground/background imbalance.
+
+---
+
+## Repository Structure
+
+~~~
 HybridFusionNet/
 ├── model/
 │   ├── EfficientNetB2.py          # EfficientNetFire architecture & modules
 │   ├── YOLOv12m.py                # DualModalYOLO architecture
 │   └── YOLOv12n_EfficientNetB2.py # HybridModel architecture & SpatialGateFusion
-├── train.py                       # Main training script (Loss, Optimizer, Loop)
-├── val.py                         # Standalone validation metric calculation
-├── ensemble.py                    # Logit-space soft-voting ensemble & threshold sweep
-├── requirements.txt               # Dependency list
+├── train.py                       # Training script (loss, optimizer, loop)
+├── val.py                         # Standalone validation metrics
+├── ensemble.py                    # Logit-space ensemble & threshold sweep
+├── requirements.txt
 └── README.md
-```
+~~~
 
 ---
 
-## ⚙️ Installation & Setup
+## Installation
 
-**1. Clone the repository:**
-```bash
+~~~bash
 git clone https://github.com/wongjoan/HybridFusion.git
 cd HybridFusion
-```
-
-**2. Create a virtual environment (Recommended):**
-```bash
 conda create -n wildfire_env python=3.9
 conda activate wildfire_env
-```
-
-**3. Install dependencies:**
-```bash
 pip install -r requirements.txt
-```
+~~~
 
-The `requirements.txt` contains:
-```text
-torch>=2.0.0
-torchvision>=0.15.0
-ultralytics>=8.1.0
-albumentations>=1.3.0
-opencv-python
-numpy
-tqdm
-matplotlib
-```
+`requirements.txt`: torch>=2.0.0, torchvision>=0.15.0, ultralytics>=8.1.0, albumentations>=1.3.0, opencv-python, numpy, tqdm, matplotlib.
 
 ---
 
-## 📊 Dataset Preparation
+## Datasets
 
-The `FireDataset` class requires perfectly aligned/registered RGB and IR image pairs along with binary ground-truth masks. The folder structure must mirror the following:
+Experiments were run separately on two public benchmarks. Raw data is not redistributed here because of licensing.
 
-```text
+| Dataset | View | Pairs used | Train | Validation |
+|---|---|---|---|---|
+| Corsican Fire Database (CFDB), Toulouse et al. (2017) | Ground | 100 (curated subset) | 80 | 20 |
+| RGB-T Wildfire Dataset, Rui et al. (2023) | Ground and aerial (UAV) | 1,367 | 1,221 | 146 |
+
+Both are available from their original authors (CFDB: http://cfdb.univ-corse.fr). The split is a single 80:20 hold-out per dataset. There is no separate test set.
+
+`FireDataset` expects registered RGB/IR pairs with binary masks:
+
+~~~
 dataset_root/
 ├── train/
-│   ├── rgb/           # e.g., 001_rgb.jpg
-│   ├── ir/            # e.g., 001_ir.jpg (1-channel grayscale)
-│   └── masks/         # e.g., 001_gt.png (binary 0/255)
-└── test/ (or val/)
+│   ├── rgb/     # e.g. 001_rgb.jpg
+│   ├── ir/      # e.g. 001_ir.jpg (1-channel grayscale)
+│   └── masks/   # e.g. 001_gt.png (binary 0/255)
+└── val/
     ├── rgb/
     ├── ir/
     └── masks/
-```
+~~~
 
-* **Augmentations**: Geometric transforms (flips, scaling, rotations) are applied jointly to RGB, IR, and the mask to preserve alignment. Photometric transforms (HSV, CLAHE, noise) are applied **only** to the RGB stream.
-
----
-
-## 📥 Pretrained Weights
-
-To achieve the reported metrics, the backbones must be initialized with pretrained weights.
-
-1. **EfficientNet-B2**: Weights are automatically downloaded from `torchvision` (`weights='DEFAULT'`). The 1-channel IR stem adapts these weights by summing the 3-channel RGB filters.
-2. **YOLOv12 Weights**: You must download the base YOLOv12 segmentation weights from Ultralytics and place them in your project folder.
-   * Download `yolov12n-seg.pt` (for `HybridModel`)
-   * Download `yolov12m-seg.pt` (for `DualModalYOLO`)
-   
-Update the paths inside the scripts where weights are loaded.
+**Preprocessing:** RGB and IR are resized to 640x640 and scaled to [0, 1]. Geometric augmentations (horizontal flip p=0.5, vertical flip p=0.2, affine p=0.5 with scale 0.9-1.1, rotation +-10 degrees, translation +-5%, shear +-5 degrees) are applied jointly to RGB, IR and the mask. Photometric augmentations (brightness/contrast, HSV, Gaussian noise, CLAHE) are applied to the RGB stream only. Validation uses resizing and normalization only.
 
 ---
 
-## 🚀 Training the Models
+## Pretrained Weights
 
-You must train each model individually before running the ensemble.
-
-1. Open `train.py`.
-2. Update the `CONFIG` dictionary:
-   ```python
-   CONFIG = {
-       "ROOT_DIR": "/path/to/dataset",
-       "SAVE_DIR": "./runs/hybrid_model",
-       "DEVICE": "cuda",
-       "BATCH_SIZE": 2,      
-       "EPOCHS": 100,
-       # ...
-   }
-   ```
-3. Uncomment the model you wish to train in the `train()` function:
-   ```python
-   model = HybridModel_nb2_().to(CONFIG["DEVICE"])
-   # model = YOLOv12m(num_classes=1).to(CONFIG["DEVICE"])
-   # model = EfficientNetFire_b2(num_classes=1).to(CONFIG["DEVICE"])
-   ```
-4. Run training:
-   ```bash
-   python train.py
-   ```
-
-Weights will be saved as `best.pt` and `last.pt` in the configured `SAVE_DIR`.
+- **EfficientNet-B2**: Downloaded automatically from `torchvision` (`weights='DEFAULT'`). The 1-channel IR stem sums the 3-channel RGB filters.
+- **YOLOv12**: Download `yolov12n-seg.pt` (for `HybridModel`) and `yolov12m-seg.pt` (for `DualModalYOLO`) from Ultralytics and update the weight paths in the scripts.
 
 ---
 
-## 🔬 Evaluation & Ensemble Inference
+## Training
 
-### Single Model Validation
-To evaluate a single trained model on the test set:
-```bash
-python val.py
-```
+1. Edit the `CONFIG` dictionary in `train.py`:
 
-### Weighted Logit Ensemble
-To run the full HybridFusionNet ensemble:
-1. Update `CONFIG["MODEL_PATHS"]` in `ensemble.py` with paths to your three `best.pt` files.
-2. (Optional) Adjust `CONFIG["WEIGHTS"]`. Default is `[0.2, 0.25, 0.55]`.
-3. Run:
-   ```bash
-   python ensemble.py
-   ```
+~~~python
+CONFIG = {
+    "ROOT_DIR": "/path/to/dataset",
+    "SAVE_DIR": "./runs/hybrid_model",
+    "DEVICE": "cuda",
+    "BATCH_SIZE": 2,
+    "EPOCHS": 100,
+}
+~~~
 
-**The ensemble script:**
-1. Evaluates each model individually to verify correct loading
-2. Finds the optimal binary threshold on the validation set
-3. Runs final inference on the test set
-4. Outputs `mIoU`, `F1`, `Precision`, `Recall`, and visualizations
+2. Uncomment the model to train in `train()`:
+
+~~~python
+model = HybridModel_nb2_().to(CONFIG["DEVICE"])
+# model = YOLOv12m(num_classes=1).to(CONFIG["DEVICE"])
+# model = EfficientNetFire_b2(num_classes=1).to(CONFIG["DEVICE"])
+~~~
+
+3. Run `python train.py`. Weights are saved as `best.pt` and `last.pt`.
+
+**Training setup (all models):** AdamW, initial learning rate 1e-3 (minimum 1e-6) with cosine annealing and a 3-epoch linear warm-up, weight decay 1e-4, batch size 2, up to 100 epochs, early stopping (patience 20) on validation mIoU, gradient clipping at 10.0, input 640x640. Trained on one NVIDIA RTX 5070 (12 GB).
+
+**Loss:** `L = L_primary + 0.4 * L_aux`, where `L_primary = 1.0 * Focal + 0.5 * Dice + 0.5 * Tversky` (Focal gamma=2.0 with hard-pixel mining on the top 70%; Tversky alpha=0.3, beta=0.7). Auxiliary supervision is applied at the P4 and P5 heads.
 
 ---
 
-## 📈 Quantitative Results
+## Evaluation and Ensemble
 
-### Main Benchmark: Corsican Fire Database (CFDB)
+Single-model validation: `python val.py` (probability threshold 0.5).
 
-| Model | Modality | mIoU (%) | F1-Score (%) | Precision (%) | Recall (%) | Acc (%) |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| DeepLabv3+ (Baseline) | RGB | 80.29 | 87.86 | - | - | 96.11 |
-| YOLOv12m-seg | RGB Only | 87.37 | 93.26 | 93.14 | 93.38 | 99.27 |
-| DualModalYOLO | RGB + IR | 91.68 | 91.43 | 91.13 | 92.19 | 98.77 |
-| EfficientNetFire | RGB + IR | 91.98 | 91.83 | 90.39 | 93.31 | 99.11 |
-| **HybridModel** | RGB + IR | 92.16 | 91.95 | 91.27 | 93.00 | 98.84 |
-| **Soft Ensemble** | **RGB + IR** | **92.56** | **92.39** | 92.15 | 92.91 | 98.90 |
+Ensemble: set `CONFIG["MODEL_PATHS"]` in `ensemble.py` to your three `best.pt` files and run `python ensemble.py`. The default weights are `[0.2, 0.25, 0.55]`. The script evaluates each model, sweeps the binary threshold on the validation set (grid search over 0.20-0.65 in steps of 0.02; best value 0.46 on CFDB), and reports mIoU, F1, precision, recall and visualizations.
 
-### Ablation Study: HybridModel Components
+Because the ensemble threshold is chosen on the same validation images that are reported, ensemble numbers are optimistic compared with the single-model numbers, which use a fixed 0.5 threshold.
 
-| Configuration | mIoU (%) | F1-Score (%) |
-| :--- | :---: | :---: |
-| Baseline | 87.01 | 84.41 |
-| w/o Aux Head | 86.75 | 84.10 |
-| w/o Spatial Gate Fusion | 86.83 | 84.10 |
+---
+
+## Results
+
+### Metric definitions
+
+All metrics are computed per image and averaged over the validation set.
+
+- **F1, Precision, Recall**: fire class, pixel-wise.
+- **mIoU**: mean of fire-class IoU and background-class IoU. Because background pixels dominate, this value is higher than fire-class IoU alone. **F1 is the better metric for comparing models.**
+- **Acc**: pixel accuracy.
+
+The unimodal baseline mIoU values came from earlier runs and appear to use a different definition (they match fire-class IoU). They are marked "n/a" below until the baselines are re-evaluated with the same script. F1, precision, recall and accuracy are comparable across all rows.
+
+### CFDB (20 validation pairs)
+
+| Model | Modality | mIoU (%) | F1 (%) | Precision (%) | Recall (%) | Acc (%) |
+|---|---|---|---|---|---|---|
+| YOLOv12m-seg | RGB | n/a | 93.26 | 93.14 | 93.38 | 99.27 |
+| YOLOv12m-seg | IR | n/a | 74.49 | 71.70 | 77.51 | 97.14 |
+| EfficientNet-B0 | RGB | n/a | 92.64 | 94.20 | 91.40 | 99.27 |
+| EfficientNet-B0 | IR | n/a | 89.51 | 90.95 | 88.20 | 98.64 |
+| DualModalYOLO | RGB+IR | 91.68 | 91.43 | 91.13 | 92.19 | 98.77 |
+| EfficientNetFire | RGB+IR | 91.98 | 91.83 | 90.39 | 93.31 | 99.11 |
+| HybridModel | RGB+IR | 92.16 | 91.95 | 91.27 | 93.00 | 98.84 |
+| Soft ensemble | RGB+IR | 92.56 | 92.39 | 92.15 | 92.91 | 98.90 |
+
+On this small validation set, the RGB-only YOLOv12m-seg baseline remains competitive on F1 and accuracy.
+
+### RGB-T Wildfire Dataset (146 validation pairs)
+
+| Model | mIoU (%) | F1 (%) |
+|---|---|---|
+| Dual YOLOv12 | 85.70 | 81.81 |
+| Dual EfficientNet | 87.87 | 86.36 |
+| **HybridModel** | **89.56** | **88.49** |
+| Soft ensemble | 87.40 | 84.06 |
+
+HybridModel is the strongest model on RGB-T. The ensemble does not improve on it there, so the CFDB ensemble gain does not carry over to this dataset.
+
+### Ablation: HybridModel components (RGB-T)
+
+| Configuration | mIoU (%) | F1 (%) |
+|---|---|---|
+| Baseline (bare minimum) | 87.01 | 84.41 |
+| w/o aux head | 86.75 | 84.10 |
+| w/o spatial gate fusion | 86.83 | 84.10 |
 | w/o CBAM | 86.88 | 84.20 |
-| w/o Edge Encoder | 86.98 | 84.43 |
+| w/o edge encoder | 86.98 | 84.43 |
 | **Full HybridModel** | **89.56** | **88.49** |
 
----
+Each removal lands close to the baseline, so the components appear to help mainly in combination. Each configuration was trained once and seed variance is not reported.
 
-## 🗄️ Data Availability
+### Prior work (reported numbers, not re-run)
 
-The experiments rely on external wildfire benchmarks. Due to licensing policies, the raw datasets are not hosted here but are available upon request:
+Published results use different splits and metric implementations, so only F1 is listed and it should be read as indicative.
 
-* **Corsican Fire Database (CFDB)**
-  * Available upon request: http://cfdb.univ-corse.fr
-  * Citation: Toulouse et al. (2017)
-
-* **RGB-T Wildfire Dataset**
-  * Available upon request from original authors
-  * Citation: Rui et al. (2023)
+| Dataset | Method | F1 (%) |
+|---|---|---|
+| CFDB | Harkat et al., DeepLabv3+ | 87.86 |
+| CFDB | Harkat et al. | 85.84 |
+| RGB-T | Rui et al. | 93.10 |
 
 ---
 
-## 📜 Citation
+## Limitations
 
-If you use this code in your research, please cite:
-
-```bibtex
-@article{hybridfusionnet2026,
-  title={Multimodal Wildfire Segmentation using YOLOv12 and EfficientNet},
-  author={Author, Name},
-  journal={Journal Name},
-  year={2026}
-}
-```
+- Small validation sets (20 pairs on CFDB, 146 on RGB-T) and a single hold-out split, with no separate test set. Differences of a few tenths of a point are within noise.
+- Model selection (early stopping on validation mIoU) and the ensemble threshold use the same validation images that are reported.
+- No repeated runs or confidence intervals.
+- The ablation shows the full model against ablated variants, but not each component's isolated contribution.
 
 ---
 
-## 📝 License
+## Citation
 
-This project is licensed under the MIT License. See LICENSE file for details.
+A citation entry will be added when the accompanying manuscript is available. Until then, please reference this repository:
+
+~~~
+Wong Jing Tao Joanne. HybridFusionNet: Multimodal Wildfire Segmentation using YOLOv12 and EfficientNet.
+GitHub repository, https://github.com/wongjoan/HybridFusion, 2026.
+~~~
+
+Dataset citations: Toulouse et al. (2017) for CFDB; Rui et al. (2023) for the RGB-T Wildfire Dataset.
 
 ---
 
-## 🤝 Contributing
+## License
 
-Contributions are welcome! Please feel free to open issues and submit pull requests.
+MIT License. See `LICENSE`.
 
----
+## Contact
 
-## 📧 Contact
-
-For inquiries, please contact: your-email@example.com
+Wong Jing Tao Joanne: wongjingtao1001@gmail.com
